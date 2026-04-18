@@ -1,0 +1,122 @@
+---
+# =============================================================================
+# docker-compose.yml
+#
+# No .env file references. No hardcoded secrets.
+# Secrets are generated ephemerally by the bootstrap-secrets init container
+# using /dev/urandom. Both db and app read from the shared secrets volume.
+#
+# Usage:
+#   docker compose up --build          # start app + db
+#   docker compose --profile test up   # run tests
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Bootstrap: generates ephemeral secrets into shared volume
+  # Runs once before db and app start.
+  # ---------------------------------------------------------------------------
+  bootstrap-secrets:
+    image: alpine:3.19
+    volumes:
+      - secrets_vol:/run/secrets
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f /run/secrets/db_password ]; then
+          echo "[bootstrap] Generating ephemeral secrets..."
+          DB_PASSWORD=$$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          printf '%s' "$$DB_PASSWORD" > /run/secrets/db_password
+          SESSION_SECRET=$$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          printf '%s' "$$SESSION_SECRET" > /run/secrets/session_secret
+          ENCRYPTION_KEY=$$(head -c 32 /dev/urandom | base64 | tr -d '\n')
+          printf '%s' "$$ENCRYPTION_KEY" > /run/secrets/encryption_key
+          chmod 644 /run/secrets/*
+          echo "[bootstrap] Secrets written to /run/secrets/"
+        else
+          echo "[bootstrap] Secrets already exist, reusing."
+        fi
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on:
+      bootstrap-secrets:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_USER: knowledgeops
+      POSTGRES_DB: knowledgeops_db
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+        tmpfs:
+          size: 512m
+      - secrets_vol:/run/secrets
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowledgeops -d knowledgeops_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - alerts_spool:/app/alerts_spool
+      - app_data:/app/data
+      - secrets_vol:/run/secrets
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: knowledgeops
+      POSTGRES_DB: knowledgeops_db
+      RUST_LOG: "info"
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+
+  # ---------------------------------------------------------------------------
+  # Test runner (only active under --profile test)
+  # ---------------------------------------------------------------------------
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    profiles:
+      - test
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - secrets_vol:/run/secrets
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: knowledgeops
+      POSTGRES_DB: knowledgeops_db
+      RUST_LOG: "debug"
+    entrypoint: ["/usr/local/bin/test_entrypoint.sh"]
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+volumes:
+  alerts_spool:
+  app_data:
+  secrets_vol:

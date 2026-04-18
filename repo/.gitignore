@@ -1,0 +1,10 @@
+/target/
+Cargo.lock
+*.swp
+*.swo
+*~
+.env
+.env.*
+*.log
+alerts_spool/
+data/

@@ -1,0 +1,11 @@
+ALTER TABLE template_versions    DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE item_versions        DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE item_version_tags    DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE audits               DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE searches             DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE search_history       DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE export_artifacts     DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE schema_mapping_versions DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE standardized_records DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE metrics_snapshots    DROP COLUMN IF EXISTS updated_at;
+ALTER TABLE rate_limits          DROP COLUMN IF EXISTS updated_at;

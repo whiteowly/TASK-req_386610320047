@@ -1,0 +1,15 @@
+# =============================================================================
+# diesel.toml
+#
+# Diesel CLI configuration for the knowledgeops project.
+# DATABASE_URL is set at runtime by scripts/bootstrap.sh — never hardcoded.
+# =============================================================================
+
+[print_schema]
+file = "src/schema.rs"
+# Customize the generated schema output
+custom_type_derives = ["diesel::query_builder::QueryId"]
+
+[migrations_directory]
+# Path to the migrations directory, relative to the project root
+dir = "migrations"

@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+
+# =============================================================================
+# Dockerfile.test
+#
+# Test image for knowledgeops. Includes the full Rust toolchain so that
+# `cargo test` can be run inside the container. Optionally installs
+# cargo-tarpaulin for coverage reporting.
+# =============================================================================
+
+FROM rust:latest
+
+# Install dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    libpq5 \
+    pkg-config \
+    postgresql-client \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install diesel CLI for running migrations
+RUN cargo install diesel_cli --no-default-features --features postgres
+
+# Optionally install cargo-tarpaulin for code coverage
+# Comment out if coverage is not needed to speed up image build
+RUN cargo install cargo-tarpaulin || echo "cargo-tarpaulin install failed; coverage will be skipped"
+
+# Copy bootstrap and test entrypoint
+COPY scripts/bootstrap.sh      /usr/local/bin/bootstrap.sh
+COPY scripts/test_entrypoint.sh /usr/local/bin/test_entrypoint.sh
+
+RUN chmod +x /usr/local/bin/bootstrap.sh \
+             /usr/local/bin/test_entrypoint.sh
+
+# Copy init script
+COPY init_db.sh /app/init_db.sh
+RUN chmod +x /app/init_db.sh
+
+# Create secrets mount point and working dirs
+RUN mkdir -p /run/secrets /app/alerts_spool /app/data
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/usr/local/bin/test_entrypoint.sh"]
