@@ -2,7 +2,7 @@
 
 ## Project Type
 
-`backend`
+`server`
 
 ## Overview
 
